@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++  -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/cvffmpeg.dir/main.cpp.o  -o cvffmpeg  -L/Users/yuitora./CLionProjects/cvffmpeg/lib -Wl,-rpath,/Users/yuitora./CLionProjects/cvffmpeg/lib -lavcodec -lavutil -lavformat -lswresample -lswscale 
