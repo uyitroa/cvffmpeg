@@ -746,9 +746,9 @@ void split(const char *cmd, std::vector<std::string> &tokens_out) {
 struct CvVideoWriter_FFMPEG
 {
     bool open( const char* filename, const char *codec_name,
-               double fps, int width, int height, const char *ffmpegcmd);
+               double fps, int width, int height, const char *ffmpegcmd, uint8_t *buf);
     void close();
-    bool writeFrame( const unsigned char* data, int step, int width, int height, int cn, int origin );
+    bool writeFrame();
 
     void init();
 
@@ -1122,27 +1122,10 @@ static int icv_av_write_frame_FFMPEG( AVFormatContext * oc, AVStream * video_st,
 }
 
 /// write a frame with FFMPEG
-bool CvVideoWriter_FFMPEG::writeFrame( const unsigned char* data, int step, int width, int height, int cn, int origin )
+bool CvVideoWriter_FFMPEG::writeFrame()
 {
-    // check parameters
-    if (input_pix_fmt == AV_PIX_FMT_BGR24) {
-        if (cn != 3) {
-            return false;
-        }
-    }
-    else if (input_pix_fmt == AV_PIX_FMT_GRAY8) {
-        if (cn != 1) {
-            return false;
-        }
-    }
-    else {
-        assert(false);
-    }
-
-    if( (width & -2) != frame_width || (height & -2) != frame_height || !data )
-        return false;
-    width = frame_width;
-    height = frame_height;
+    int width = frame_width;
+    int height = frame_height;
 
     // typecast from opaque data type to implemented struct
 #if LIBAVFORMAT_BUILD > 4628
@@ -1160,10 +1143,10 @@ bool CvVideoWriter_FFMPEG::writeFrame( const unsigned char* data, int step, int 
     const int CV_STEP_ALIGNMENT = 32;
     const size_t CV_SIMD_SIZE = 32;
     const size_t CV_PAGE_MASK = ~(4096 - 1);
-    const unsigned char* dataend = data + ((size_t)height * step);
+    int step = width * 3 * sizeof(uint8_t);
+    const unsigned char* dataend = picbuf + ((size_t)height * step);
     if (step % CV_STEP_ALIGNMENT != 0 ||
-        (((size_t)dataend - CV_SIMD_SIZE) & CV_PAGE_MASK) != (((size_t)dataend + CV_SIMD_SIZE) & CV_PAGE_MASK))
-    {
+        (((size_t)dataend - CV_SIMD_SIZE) & CV_PAGE_MASK) != (((size_t)dataend + CV_SIMD_SIZE) & CV_PAGE_MASK)) {
         int aligned_step = (step + CV_STEP_ALIGNMENT - 1) & ~(CV_STEP_ALIGNMENT - 1);
 
         size_t new_size = (aligned_step * height + CV_SIMD_SIZE);
@@ -1176,49 +1159,41 @@ bool CvVideoWriter_FFMPEG::writeFrame( const unsigned char* data, int step, int 
             aligned_input = (unsigned char*)av_mallocz(aligned_input_size);
         }
 
-        if (origin == 1)
-            for( int y = 0; y < height; y++ )
-                memcpy(aligned_input + y*aligned_step, data + (height-1-y)*step, step);
-        else
-            for( int y = 0; y < height; y++ )
-                memcpy(aligned_input + y*aligned_step, data + y*step, step);
+//        if (origin == 1)
+//            for( int y = 0; y < height; y++ )
+//                memcpy(aligned_input + y*aligned_step, picbuf + (height-1-y)*step, step);
+//        else
+        for( int y = 0; y < height; y++ )
+            memcpy(aligned_input + y*aligned_step, picbuf + y*step, step);
 
-        data = aligned_input;
+                // let input_picture point to the raw data buffer of 'image'
+        _opencv_ffmpeg_av_image_fill_arrays(input_picture, aligned_input,
+                                            (AVPixelFormat)input_pix_fmt, width, height);
         step = aligned_step;
     }
 
-    if ( c->pix_fmt != input_pix_fmt ) {
-        assert( input_picture );
-        // let input_picture point to the raw data buffer of 'image'
-        _opencv_ffmpeg_av_image_fill_arrays(input_picture, (uint8_t *) data,
-                       (AVPixelFormat)input_pix_fmt, width, height);
-        input_picture->linesize[0] = step;
+    assert( input_picture );
+    input_picture->linesize[0] = step;
 
+    if( !img_convert_ctx )
+    {
+        img_convert_ctx = sws_getContext(width,
+                                         height,
+                                         (AVPixelFormat)input_pix_fmt,
+                                         c->width,
+                                         c->height,
+                                         c->pix_fmt,
+                                         SWS_BICUBIC,
+                                         NULL, NULL, NULL);
         if( !img_convert_ctx )
-        {
-            img_convert_ctx = sws_getContext(width,
-                                             height,
-                                             (AVPixelFormat)input_pix_fmt,
-                                             c->width,
-                                             c->height,
-                                             c->pix_fmt,
-                                             SWS_BICUBIC,
-                                             NULL, NULL, NULL);
-            if( !img_convert_ctx )
-                return false;
-        }
-
-        if ( sws_scale(img_convert_ctx, input_picture->data,
-                       input_picture->linesize, 0,
-                       height,
-                       picture->data, picture->linesize) < 0 )
             return false;
     }
-    else{
-        _opencv_ffmpeg_av_image_fill_arrays(picture, (uint8_t *) data,
-                       (AVPixelFormat)input_pix_fmt, width, height);
-        picture->linesize[0] = step;
-    }
+
+    if ( sws_scale(img_convert_ctx, input_picture->data,
+                   input_picture->linesize, 0,
+                   height,
+                   picture->data, picture->linesize) < 0 )
+        return false;
 
     picture->pts = frame_idx;
     bool ret = icv_av_write_frame_FFMPEG( oc, video_st, outbuf, outbuf_size, picture) >= 0;
@@ -1318,11 +1293,12 @@ void CvVideoWriter_FFMPEG::close()
 
 /// Create a video writer object that uses FFMPEG
 bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
-                                 double fps, int width, int height, const char *ffmpegcmd )
-{
+                                 double fps, int width, int height, const char *ffmpegcmd, uint8_t *buf) {
     InternalFFMpegRegister::init();
     int err, codec_pix_fmt;
     double bitrate_scale = 1;
+
+    picbuf = buf;
 
     close();
 
@@ -1620,17 +1596,20 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
     frame_idx = 0;
     ok = true;
 
+    _opencv_ffmpeg_av_image_fill_arrays(input_picture, buf,
+                                    (AVPixelFormat)input_pix_fmt, width, height);
+
     return true;
 }
 
 
 CvVideoWriter_FFMPEG* cvCreateVideoWriter_FFMPEG( const char* filename, const char *codec_name, double fps,
-                                                  int width, int height, const char *ffmpegcmd) {
+                                                  int width, int height, const char *ffmpegcmd, uint8_t *buf) {
     CvVideoWriter_FFMPEG* writer = (CvVideoWriter_FFMPEG*)malloc(sizeof(*writer));
     if (!writer)
         return 0;
     writer->init();
-    if( writer->open( filename, codec_name, fps, width, height, ffmpegcmd))
+    if( writer->open( filename, codec_name, fps, width, height, ffmpegcmd, buf))
         return writer;
     writer->close();
     free(writer);
@@ -1649,7 +1628,7 @@ void cvReleaseVideoWriter_FFMPEG( CvVideoWriter_FFMPEG** writer ) {
 int cvWriteFrame_FFMPEG( CvVideoWriter_FFMPEG* writer,
                          const unsigned char* data, int step,
                          int width, int height, int cn, int origin) {
-    return writer->writeFrame(data, step, width, height, cn, origin);
+    return writer->writeFrame();
 }
 
 inline bool is_valid_codec(const char* codec_name) {

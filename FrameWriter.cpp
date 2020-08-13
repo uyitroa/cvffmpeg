@@ -18,7 +18,7 @@ FrameWriter::FrameWriter(const char *filename, const char *codec_name, double fp
     for (int i = 0; i < width * height * 3; i++)
         this->data[i] = 0;
 
-    framewriter = cvCreateVideoWriter_FFMPEG(filename, codec_name, fps, width, height, ffmpegcmd);
+    framewriter = cvCreateVideoWriter_FFMPEG(filename, codec_name, fps, width, height, ffmpegcmd, data);
     if(framewriter)
         initialized = true;
 }
@@ -26,7 +26,7 @@ FrameWriter::FrameWriter(const char *filename, const char *codec_name, double fp
 int FrameWriter::write_frame() {
     if (!initialized)
         return 1;
-    return framewriter->writeFrame(data, step, width, height, n_channel, 0);
+    return framewriter->writeFrame();
 }
 
 void FrameWriter::close_video() {

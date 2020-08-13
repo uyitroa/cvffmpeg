@@ -4,6 +4,8 @@
 #ifndef __OPENCV_FFMPEG_LEGACY_API_H__
 #define __OPENCV_FFMPEG_LEGACY_API_H__
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -24,7 +26,7 @@ extern "C"
 typedef struct CvVideoWriter_FFMPEG CvVideoWriter_FFMPEG;
 
 OPENCV_FFMPEG_API struct CvVideoWriter_FFMPEG* cvCreateVideoWriter_FFMPEG(const char* filename,
-            const char *codec_name, double fps, int width, int height, const char *ffmpegcmd);
+            const char *codec_name, double fps, int width, int height, const char *ffmpegcmd, uint8_t *buf);
 OPENCV_FFMPEG_API int cvWriteFrame_FFMPEG(struct CvVideoWriter_FFMPEG* writer, const unsigned char* data,
                                           int step, int width, int height, int cn, int origin);
 OPENCV_FFMPEG_API void cvReleaseVideoWriter_FFMPEG(struct CvVideoWriter_FFMPEG** writer);
