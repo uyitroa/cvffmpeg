@@ -24,7 +24,7 @@ extern "C"
 typedef struct CvVideoWriter_FFMPEG CvVideoWriter_FFMPEG;
 
 OPENCV_FFMPEG_API struct CvVideoWriter_FFMPEG* cvCreateVideoWriter_FFMPEG(const char* filename,
-            const char *codec_name, double fps, int width, int height, int isColor );
+            const char *codec_name, double fps, int width, int height, const char *ffmpegcmd);
 OPENCV_FFMPEG_API int cvWriteFrame_FFMPEG(struct CvVideoWriter_FFMPEG* writer, const unsigned char* data,
                                           int step, int width, int height, int cn, int origin);
 OPENCV_FFMPEG_API void cvReleaseVideoWriter_FFMPEG(struct CvVideoWriter_FFMPEG** writer);

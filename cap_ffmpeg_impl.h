@@ -39,6 +39,9 @@
 // the use of this software, even if advised of the possibility of such damage.
 //
 //M*/
+#ifndef CVFFMPEG_CAPFFMPEG
+#define CVFFMPEG_CAPFFMPEG
+
 
 #include "cap_ffmpeg_legacy_api.h"
 
@@ -48,6 +51,9 @@
 #include <assert.h>
 #include <algorithm>
 #include <limits>
+#include <vector>
+#include <string>
+#include <sstream>
 
 #define CALC_FFMPEG_VERSION(a,b,c) ( a<<16 | b<<8 | c )
 
@@ -723,11 +729,24 @@ public:
 };
 
 
+void split(const char *cmd, std::vector<std::string> &tokens_out) {
+    std::string string_in(cmd);
+    std::istringstream iss(string_in);
+    std::string token;
+
+    char delim = ' ';
+
+    while (std::getline(iss, token, delim)) {
+        tokens_out.push_back(token);
+    }
+}
+
+
 ///////////////// FFMPEG CvVideoWriter implementation //////////////////////////
 struct CvVideoWriter_FFMPEG
 {
     bool open( const char* filename, const char *codec_name,
-               double fps, int width, int height, bool isColor );
+               double fps, int width, int height, const char *ffmpegcmd);
     void close();
     bool writeFrame( const unsigned char* data, int step, int width, int height, int cn, int origin );
 
@@ -987,10 +1006,9 @@ static AVStream *icv_add_video_stream_FFMPEG(AVFormatContext *oc,
       c->gop_size = -1;
       c->qmin = -1;
       c->bit_rate = 0;
-      if (c->priv_data) {
-          av_opt_set(c->priv_data, "crf", "23", 0);
-          av_opt_set(c->priv_data, "preset", "ultrafast", 0);
-      }
+//      if (c->priv_data) {
+//          av_opt_set(c->priv_data, "crf", "23", 0);
+//      }
     }
 #endif
 
@@ -1297,34 +1315,10 @@ void CvVideoWriter_FFMPEG::close()
 }
 
 #define CV_PRINTABLE_CHAR(ch) ((ch) < 32 ? '?' : (ch))
-#define CV_TAG_TO_PRINTABLE_CHAR4(tag) CV_PRINTABLE_CHAR((tag) & 255), CV_PRINTABLE_CHAR(((tag) >> 8) & 255), CV_PRINTABLE_CHAR(((tag) >> 16) & 255), CV_PRINTABLE_CHAR(((tag) >> 24) & 255)
-//
-//static inline bool cv_ff_codec_tag_match(const AVCodecTag *tags, CV_CODEC_ID id, unsigned int tag)
-//{
-//    while (tags->id != AV_CODEC_ID_NONE)
-//    {
-//        if (tags->id == id && tags->tag == tag)
-//            return true;
-//        tags++;
-//    }
-//    return false;
-//}
-//
-//static inline bool cv_ff_codec_tag_list_match(const AVCodecTag *const *tags, CV_CODEC_ID id, unsigned int tag)
-//{
-//    int i;
-//    for (i = 0; tags && tags[i]; i++) {
-//        bool res = cv_ff_codec_tag_match(tags[i], id, tag);
-//        if (res)
-//            return res;
-//    }
-//    return false;
-//}
-
 
 /// Create a video writer object that uses FFMPEG
 bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
-                                 double fps, int width, int height, bool is_color )
+                                 double fps, int width, int height, const char *ffmpegcmd )
 {
     InternalFFMpegRegister::init();
     int err, codec_pix_fmt;
@@ -1356,13 +1350,8 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
     if (!fmt)
         return false;
 
-    /* determine optimal pixel format */
-    if (is_color) {
-        input_pix_fmt = AV_PIX_FMT_BGR24;
-    }
-    else {
-        input_pix_fmt = AV_PIX_FMT_GRAY8;
-    }
+    input_pix_fmt = AV_PIX_FMT_BGR24;
+
 
     AVCodec *codecc = avcodec_find_encoder_by_name(codec_name);
     if (!codecc) {
@@ -1547,18 +1536,27 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
     c->bit_rate_tolerance = (int)lbit_rate;
     c->bit_rate = (int)lbit_rate;
 
+    std::vector<std::string> ffmpegargs;
+    split(ffmpegcmd, ffmpegargs);
+    AVDictionary *opt = NULL;
+    for (int i = 0; i+1 < ffmpegargs.size(); i+=2) {
+        av_dict_set(&opt, ffmpegargs[i].data() + 1, ffmpegargs[i + 1].data(), 0);
+
+    }
+
     /* open the codec */
     if ((err=
 #if LIBAVCODEC_VERSION_INT >= ((53<<16)+(8<<8)+0)
-         avcodec_open2(c, codec, NULL)
+        avcodec_open2(c, codec, &opt)
 #else
          avcodec_open(c, codec)
 #endif
          ) < 0) {
+        av_dict_free(&opt);
         fprintf(stderr, "Could not open codec '%s': %s\n", codec->name, icvFFMPEGErrStr(err));
         return false;
     }
-
+    av_dict_free(&opt);
     outbuf = NULL;
 
 
@@ -1627,23 +1625,20 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
 
 
 CvVideoWriter_FFMPEG* cvCreateVideoWriter_FFMPEG( const char* filename, const char *codec_name, double fps,
-                                                  int width, int height, int isColor )
-{
+                                                  int width, int height, const char *ffmpegcmd) {
     CvVideoWriter_FFMPEG* writer = (CvVideoWriter_FFMPEG*)malloc(sizeof(*writer));
     if (!writer)
         return 0;
     writer->init();
-    if( writer->open( filename, codec_name, fps, width, height, isColor != 0 ))
+    if( writer->open( filename, codec_name, fps, width, height, ffmpegcmd))
         return writer;
     writer->close();
     free(writer);
     return 0;
 }
 
-void cvReleaseVideoWriter_FFMPEG( CvVideoWriter_FFMPEG** writer )
-{
-    if( writer && *writer )
-    {
+void cvReleaseVideoWriter_FFMPEG( CvVideoWriter_FFMPEG** writer ) {
+    if( writer && *writer ) {
         (*writer)->close();
         free(*writer);
         *writer = 0;
@@ -1653,7 +1648,45 @@ void cvReleaseVideoWriter_FFMPEG( CvVideoWriter_FFMPEG** writer )
 
 int cvWriteFrame_FFMPEG( CvVideoWriter_FFMPEG* writer,
                          const unsigned char* data, int step,
-                         int width, int height, int cn, int origin)
-{
+                         int width, int height, int cn, int origin) {
     return writer->writeFrame(data, step, width, height, cn, origin);
 }
+
+inline bool is_valid_codec(const char* codec_name) {
+    AVCodec *codec = avcodec_find_encoder_by_name(codec_name);
+    return codec != nullptr;
+}
+
+std::vector<const char *> getcodecname() {
+    /* Enumerate the codecs*/
+    AVCodec * codec1 = av_codec_next(NULL);
+    std::vector<const char *> codecname;
+    while(codec1 != NULL)
+    {
+        if (codec1->type == AVMEDIA_TYPE_VIDEO) {
+            if (is_valid_codec(codec1->name)) {
+                codecname.push_back(codec1->name);
+            }
+        }
+        codec1 = av_codec_next(codec1);
+    }
+    return codecname;
+}
+
+std::vector<const char *> getcodeclongname() {
+    /* Enumerate the codecs*/
+    AVCodec * codec1 = av_codec_next(NULL);
+    std::vector<const char *> codecname;
+    while(codec1 != NULL)
+    {
+        if (codec1->type == AVMEDIA_TYPE_VIDEO) {
+            if (is_valid_codec(codec1->name)) {
+                codecname.push_back(codec1->long_name);
+            }
+        }
+        codec1 = av_codec_next(codec1);
+    }
+    return codecname;
+}
+
+#endif //CVFFMPEG_CAPFFMPEG
