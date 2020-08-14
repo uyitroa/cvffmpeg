@@ -12,9 +12,9 @@ FrameWriter::FrameWriter(const char *filename, const char *codec_name, double fp
     this->height = height;
     this->fps = fps;
     this->step = width * n_channel * sizeof(uint8_t);
-    this->n_channel = 3;
+    this->n_channel = 4;
     this->data = buf;
-    for (int i = 0; i < width * height * 3; i++)
+    for (int i = 0; i < width * height * n_channel; i++)
         this->data[i] = 0;
     framewriter = cvCreateVideoWriter_FFMPEG(filename, codec_name, fps, width, height, ffmpegcmd);
     if(framewriter)

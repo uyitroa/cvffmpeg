@@ -1135,6 +1135,11 @@ bool CvVideoWriter_FFMPEG::writeFrame( const unsigned char* data, int step, int 
             return false;
         }
     }
+    else if (input_pix_fmt == AV_PIX_FMT_BGRA) {
+        if (cn != 4) {
+            return false;
+        }
+    }
     else {
         assert(false);
     }
@@ -1350,7 +1355,7 @@ bool CvVideoWriter_FFMPEG::open( const char * filename, const char *codec_name,
     if (!fmt)
         return false;
 
-    input_pix_fmt = AV_PIX_FMT_BGR24;
+    input_pix_fmt = AV_PIX_FMT_BGRA;
 
 
     AVCodec *codecc = avcodec_find_encoder_by_name(codec_name);
