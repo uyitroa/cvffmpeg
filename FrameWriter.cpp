@@ -44,3 +44,43 @@ bool FrameWriter::is_opened() {
 FrameWriter::~FrameWriter() {
 
 }
+
+
+bool is_valid_codec(const char* codec_name) {
+    AVCodec *codec = avcodec_find_encoder_by_name(codec_name);
+    return codec != nullptr;
+}
+
+std::vector<const char *> getcodecname() {
+    const AVCodec *current_codec = nullptr;
+    void *i = 0;
+    std::vector<const char *> codecname;
+    current_codec = av_codec_iterate(&i);
+    while(current_codec)
+    {
+        if (current_codec->type == AVMEDIA_TYPE_VIDEO) {
+            if (is_valid_codec(current_codec->name)) {
+                codecname.push_back(current_codec->name);
+            }
+        }
+        current_codec = av_codec_iterate(&i);
+    }
+    return codecname;
+}
+
+std::vector<const char *> getcodeclongname() {
+    const AVCodec *current_codec = nullptr;
+    void *i = 0;
+    std::vector<const char *> codecname;
+    current_codec = av_codec_iterate(&i);
+    while(current_codec)
+    {
+        if (current_codec->type == AVMEDIA_TYPE_VIDEO) {
+            if (is_valid_codec(current_codec->name)) {
+                codecname.push_back(current_codec->long_name);
+            }
+        }
+        current_codec = av_codec_iterate(&i);
+    }
+    return codecname;
+}

@@ -1,10 +1,9 @@
 # distutils: language = c++
 from cpython cimport Py_buffer
 import ctypes
-from multiprocessing.sharedctypes import RawArray
 import numpy as np
 cimport numpy as np
-
+from libcpp.vector cimport vector
 
 # Declare the class with cdef
 cdef extern from "FrameWriter.h":
@@ -19,6 +18,8 @@ cdef extern from "FrameWriter.h":
 		FrameWriter(const char *filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd, unsigned char *buf);
 		void close_video();
 		int write_frame();
+	vector[const char *] getcodecname();
+	vector[const char *] getcodeclongname();
 
 cdef class PyFrameWriter:
 	cdef FrameWriter c_writer
@@ -54,3 +55,12 @@ cdef class PyFrameWriter:
 	def __releasebuffer__(self, Py_buffer *buffer):
 		pass
 
+
+def getcodec():
+	codecs = {}
+	codecname = getcodecname()
+	codeclongname = getcodeclongname()
+
+	for i in range(len(codecname)):
+		codecs[codecname[i]] = codeclongname[i]
+	return codecs

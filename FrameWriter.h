@@ -7,6 +7,7 @@
 
 #include "cap_ffmpeg_legacy_api.h"
 #include <stdint.h>
+#include <vector>
 
 class FrameWriter {
 private:
@@ -28,6 +29,10 @@ public:
     ~FrameWriter();
 
 };
+
+std::vector<const char *> getcodecname();
+std::vector<const char *> getcodeclongname();
+
 
 
 #endif //CVFFMPEG_FRAMEWRITER_H

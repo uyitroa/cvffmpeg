@@ -1652,41 +1652,4 @@ int cvWriteFrame_FFMPEG( CvVideoWriter_FFMPEG* writer,
     return writer->writeFrame(data, step, width, height, cn, origin);
 }
 
-inline bool is_valid_codec(const char* codec_name) {
-    AVCodec *codec = avcodec_find_encoder_by_name(codec_name);
-    return codec != nullptr;
-}
-
-std::vector<const char *> getcodecname() {
-    /* Enumerate the codecs*/
-    AVCodec * codec1 = av_codec_next(NULL);
-    std::vector<const char *> codecname;
-    while(codec1 != NULL)
-    {
-        if (codec1->type == AVMEDIA_TYPE_VIDEO) {
-            if (is_valid_codec(codec1->name)) {
-                codecname.push_back(codec1->name);
-            }
-        }
-        codec1 = av_codec_next(codec1);
-    }
-    return codecname;
-}
-
-std::vector<const char *> getcodeclongname() {
-    /* Enumerate the codecs*/
-    AVCodec * codec1 = av_codec_next(NULL);
-    std::vector<const char *> codecname;
-    while(codec1 != NULL)
-    {
-        if (codec1->type == AVMEDIA_TYPE_VIDEO) {
-            if (is_valid_codec(codec1->name)) {
-                codecname.push_back(codec1->long_name);
-            }
-        }
-        codec1 = av_codec_next(codec1);
-    }
-    return codecname;
-}
-
 #endif //CVFFMPEG_CAPFFMPEG
