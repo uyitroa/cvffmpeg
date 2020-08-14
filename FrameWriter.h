@@ -21,7 +21,7 @@ public:
     int step;
 
     FrameWriter();
-    FrameWriter(const char* filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd);
+    FrameWriter(const char* filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd, uint8_t *buf);
     int write_frame();
     void close_video();
     bool is_opened();

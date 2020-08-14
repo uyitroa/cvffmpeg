@@ -1,6 +1,9 @@
 # distutils: language = c++
-
 from cpython cimport Py_buffer
+import ctypes
+from multiprocessing.sharedctypes import RawArray
+import numpy as np
+cimport numpy as np
 
 
 # Declare the class with cdef
@@ -13,15 +16,17 @@ cdef extern from "FrameWriter.h":
 		unsigned char *data;
 
 		FrameWriter();
-		FrameWriter(const char *filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd);
+		FrameWriter(const char *filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd, unsigned char *buf);
 		void close_video();
 		int write_frame();
 
 cdef class PyFrameWriter:
-	cdef FrameWriter c_writer  # Hold a C++ instance which we're wrapping
+	cdef FrameWriter c_writer
 
-	def __cinit__(self, const char *filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd):
-		self.c_writer = FrameWriter(filename, codec_name, fps, width, height, ffmpegcmd)
+	def __cinit__(self, const char *filename, const char *codec_name, double fps, int width, int height, const char *ffmpegcmd, np.ndarray im):
+		cdef np.ndarray[np.uint8_t, ndim=1, mode = 'c'] np_buf = np.ascontiguousarray(im, dtype = np.uint8)
+		cdef unsigned char* buf = <unsigned char*> np_buf.data
+		self.c_writer = FrameWriter(filename, codec_name, fps, width, height, ffmpegcmd, buf)
 
 	def close_video(self):
 		return self.c_writer.close_video()
@@ -48,3 +53,4 @@ cdef class PyFrameWriter:
 
 	def __releasebuffer__(self, Py_buffer *buffer):
 		pass
+
